@@ -1,13 +1,16 @@
 <template>
   <div class="app-container">
+    <!-- 搜索区 -->
     <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" label-width="68px">
       <el-form-item label="名称" prop="name">
-        <el-input
-          v-model="queryParams.name"
-          placeholder="请输入名称"
-          clearable
-          @keyup.enter="handleQuery"
-        />
+        <el-input v-model="queryParams.name" placeholder="请输入名称" clearable @keyup.enter="handleQuery" />
+      </el-form-item>
+
+      <el-form-item label="状态" prop="status">
+        <el-select v-model="queryParams.status" placeholder="请输入状态" clearable>
+          <el-option v-for="(item, index) in nursing_project_status" :key="index" :label="item.label"
+            :value="item.value" />
+        </el-select>
       </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
@@ -15,77 +18,64 @@
       </el-form-item>
     </el-form>
 
+    <!-- 操作区 -->
     <el-row :gutter="10" class="mb8">
       <el-col :span="1.5">
-        <el-button
-          type="primary"
-          plain
-          icon="Plus"
-          @click="handleAdd"
-          v-hasPermi="['nursing:project:add']"
-        >新增</el-button>
+        <el-button type="primary" plain icon="Plus" @click="handleAdd"
+          v-hasPermi="['nursing:project:add']">新增</el-button>
       </el-col>
       <el-col :span="1.5">
-        <el-button
-          type="success"
-          plain
-          icon="Edit"
-          :disabled="single"
-          @click="handleUpdate"
-          v-hasPermi="['nursing:project:edit']"
-        >修改</el-button>
+        <el-button type="danger" plain icon="Delete" :disabled="multiple" @click="handleDelete"
+          v-hasPermi="['nursing:project:remove']">删除</el-button>
       </el-col>
       <el-col :span="1.5">
-        <el-button
-          type="danger"
-          plain
-          icon="Delete"
-          :disabled="multiple"
-          @click="handleDelete"
-          v-hasPermi="['nursing:project:remove']"
-        >删除</el-button>
-      </el-col>
-      <el-col :span="1.5">
-        <el-button
-          type="warning"
-          plain
-          icon="Download"
-          @click="handleExport"
-          v-hasPermi="['nursing:project:export']"
-        >导出</el-button>
+        <el-button type="warning" plain icon="Download" @click="handleExport"
+          v-hasPermi="['nursing:project:export']">导出</el-button>
       </el-col>
       <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
+    <!-- 表格 -->
     <el-table v-loading="loading" :data="projectList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
-      <el-table-column label="编号" align="center" prop="id" />
-      <el-table-column label="名称" align="center" prop="name" />
-      <el-table-column label="排序号" align="center" prop="orderNo" />
-      <el-table-column label="单位" align="center" prop="unit" />
-      <el-table-column label="价格" align="center" prop="price" />
+      <el-table-column label="序号" type="index" align="center" width="50" />
       <el-table-column label="图片" align="center" prop="image" width="100">
         <template #default="scope">
-          <image-preview :src="scope.row.image" :width="50" :height="50"/>
+          <image-preview :src="scope.row.image" :width="50" :height="50" />
         </template>
       </el-table-column>
+      <el-table-column label="名称" align="center" prop="name" />
+      <el-table-column label="价格" align="center" prop="price" />
+      <el-table-column label="单位" align="center" prop="unit" />
+      <el-table-column label="排序号" align="center" prop="orderNo" />
       <el-table-column label="护理要求" align="center" prop="nursingRequirement" />
-      <el-table-column label="状态" align="center" prop="status" />
-      <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
+      <el-table-column label="状态" align="center" prop="status">
         <template #default="scope">
-          <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['nursing:project:edit']">修改</el-button>
-          <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['nursing:project:remove']">删除</el-button>
+          <el-tag :type="scope.row.status ? 'success' : 'danger'" size="small">
+            {{ scope.row.status === 1 ? '启用' : '停用' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="创建时间" align="center" prop="createTime" width="180">
+        <template #default="scope">
+          <span>{{ parseTime(scope.row.createTime), '{y}-{m}-{d} {h}-{m}-{s}' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" fixed="right" align="center" class-name="small-padding fixed-width" min-width="160">
+        <template #default="scope">
+          <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)"
+            v-hasPermi="['nursing:project:edit']">修改</el-button>
+          <el-button link type="danger" icon="Delete" @click="handleDelete(scope.row)"
+            v-hasPermi="['nursing:project:remove']">删除</el-button>
+          <el-button link type="warning" :icon="scope.row.status === 0 ? 'Unlock' : 'Lock'"
+            @click="handleStatus(scope.row)" v-hasPermi="['nursing:project:status']">{{ scope.row.status === 0 ? '启用' :
+              '停用' }}</el-button>
         </template>
       </el-table-column>
     </el-table>
-    
-    <pagination
-      v-show="total>0"
-      :total="total"
-      v-model:page="queryParams.pageNum"
-      v-model:limit="queryParams.pageSize"
-      @pagination="getList"
-    />
+
+    <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum"
+      v-model:limit="queryParams.pageSize" @pagination="getList" />
 
     <!-- 添加或修改护理项目对话框 -->
     <el-dialog :title="title" v-model="open" width="500px" append-to-body>
@@ -94,19 +84,26 @@
           <el-input v-model="form.name" placeholder="请输入名称" />
         </el-form-item>
         <el-form-item label="排序号" prop="orderNo">
-          <el-input v-model="form.orderNo" placeholder="请输入排序号" />
+          <el-input-number v-model="form.orderNo" :min="0" placeholder="请输入" />
         </el-form-item>
         <el-form-item label="单位" prop="unit">
           <el-input v-model="form.unit" placeholder="请输入单位" />
         </el-form-item>
         <el-form-item label="价格" prop="price">
-          <el-input v-model="form.price" placeholder="请输入价格" />
+          <el-input-number v-model="form.price" :min="0" placeholder="请输入" />
+        </el-form-item>
+        <el-form-item label="状态" prop="status">
+          <el-radio-group v-model="form.status">
+            <el-radio v-for="item in nursing_project_status" :key="item.value" :label="item.value">
+              {{ item.label }}
+            </el-radio>
+          </el-radio-group>
         </el-form-item>
         <el-form-item label="图片" prop="image">
-          <image-upload v-model="form.image"/>
+          <image-upload v-model="form.image" />
         </el-form-item>
         <el-form-item label="护理要求" prop="nursingRequirement">
-          <el-input v-model="form.nursingRequirement" placeholder="请输入护理要求" />
+          <el-input v-model="form.nursingRequirement" type="textarea" placeholder="请输入护理要求" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -123,6 +120,7 @@
 import { listProject, getProject, delProject, addProject, updateProject } from "@/api/nursing/project"
 
 const { proxy } = getCurrentInstance()
+const { nursing_project_status } = proxy.useDict("nursing_project_status")
 
 const projectList = ref([])
 const open = ref(false)
@@ -133,6 +131,12 @@ const single = ref(true)
 const multiple = ref(true)
 const total = ref(0)
 const title = ref("")
+
+// 状态下拉框
+const statusOptions = [
+  { label: "启用", value: 1 },
+  { label: "停用", value: 0 }
+]
 
 const data = reactive({
   form: {},
@@ -216,9 +220,25 @@ function handleUpdate(row) {
   const _id = row.id || ids.value
   getProject(_id).then(response => {
     form.value = response.data
+    form.value.status = String(form.value.status)
     open.value = true
     title.value = "修改护理项目"
   })
+}
+// 停启用按钮操作
+const handleStatus = (row) => {
+  const _ids = row.id || ids.value
+  const _status = row.status === 0 ? '启用' : '禁用'
+  const data = {
+    id: _ids,
+    status: row.status === 0 ? 1 : 0
+  }
+  proxy.$modal.confirm(`是否确认${_status}护理项目编号为"${_ids}"的数据项？`).then(function () {
+    return updateProject(data)
+  }).then(() => {
+    getList()
+    proxy.$modal.msgSuccess(`${_status}成功`)
+  }).catch(() => { })
 }
 
 /** 提交按钮 */
@@ -245,12 +265,12 @@ function submitForm() {
 /** 删除按钮操作 */
 function handleDelete(row) {
   const _ids = row.id || ids.value
-  proxy.$modal.confirm('是否确认删除护理项目编号为"' + _ids + '"的数据项？').then(function() {
+  proxy.$modal.confirm('是否确认删除护理项目编号为"' + _ids + '"的数据项？').then(function () {
     return delProject(_ids)
   }).then(() => {
     getList()
     proxy.$modal.msgSuccess("删除成功")
-  }).catch(() => {})
+  }).catch(() => { })
 }
 
 /** 导出按钮操作 */
